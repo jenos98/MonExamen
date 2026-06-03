@@ -11,6 +11,11 @@ Bienvenue sur le projet **MonExamen**, une plateforme académique complète con�
   - **Étudiants :** Accèdent uniquement aux documents approuvés correspondants à leur promotion et leur département.
   - **Administrateurs :** Peuvent soumettre de nouveaux documents et visualiser l'état de validation de leurs propres ajouts.
   - **Super Administrateurs :** Gèrent l'intégralité du contenu (validation/refus des documents), les comptes utilisateurs (étudiants et admins) et visualisent le journal système.
+- **Suppression Sécurisée des Comptes :**
+  - Le super administrateur peut **supprimer définitivement** un compte administrateur ou étudiant.
+  - La suppression désactive le compte (soft-delete), invalide immédiatement les tokens JWT et empêche toute reconnexion.
+  - **Les documents publiés par l'utilisateur supprimé sont conservés** et restent accessibles aux autres utilisateurs.
+  - L'adresse email est libérée pour permettre une éventuelle réinscription.
 - **Circuit de Validation :** Tout document soumis par un administrateur doit être "Validé" par un super administrateur avant d'être visible par les étudiants.
 - **Tableaux de Bord Dynamiques :** Interfaces de gestion réactives avec des statistiques en temps réel.
 - **Gestion de Session Persistante :** Utilisation de `localStorage` pour maintenir la session active même après actualisation de la page ou réouverture du navigateur.
@@ -109,4 +114,21 @@ Voici les identifiants de test générés automatiquement lors de l'initialisati
   - Mot de passe : `student123`
 
 *(Note : Depuis l'interface web, vous pouvez créer de nouveaux comptes étudiants en utilisant l'onglet "Créer un compte").*
-# MonExamen
+
+---
+
+## Migration de la Base de Données
+
+Si vous mettez à jour une installation existante, exécutez la migration suivante pour ajouter le support de la suppression sécurisée des comptes :
+
+```sql
+ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER approved;
+```
+
+Cette migration ajoute le champ `is_active` qui permet la désactivation des comptes (soft-delete) tout en conservant les documents associés.
+
+---
+
+## Équipe
+
+Projet développé par l'équipe **Codeur X**.

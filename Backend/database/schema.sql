@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
     promotion_id INT DEFAULT NULL,
     department_id INT DEFAULT NULL,
     approved TINYINT(1) NOT NULL DEFAULT 1,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (promotion_id) REFERENCES promotions(id) ON DELETE SET NULL,
     FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL

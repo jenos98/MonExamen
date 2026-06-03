@@ -74,14 +74,14 @@ def execute_query(query, params=None, fetch_one=False, fetch_all=False, commit=F
 
 # ── Users ──────────────────────────────────────────────────
 def get_user_by_email(email):
-    return execute_query("SELECT * FROM users WHERE email = %s", (email,), fetch_one=True)
+    return execute_query("SELECT * FROM users WHERE email = %s AND is_active = 1", (email,), fetch_one=True)
 
 def get_user_by_id(user_id):
     return execute_query("SELECT * FROM users WHERE id = %s", (user_id,), fetch_one=True)
 
 def get_all_users():
     return execute_query(
-        "SELECT id, fullname, email, role, promotion_id, department_id, approved, created_at FROM users",
+        "SELECT id, fullname, email, role, promotion_id, department_id, approved, is_active, created_at FROM users",
         fetch_all=True
     )
 
@@ -101,7 +101,11 @@ def update_user(user_id, updates):
     execute_query(f"UPDATE users SET {set_clause} WHERE id = %s", values, commit=True)
 
 def delete_user(user_id):
-    execute_query("DELETE FROM users WHERE id = %s", (user_id,), commit=True)
+    """Soft-delete: deactivate the user, scramble email and wipe password."""
+    execute_query(
+        "UPDATE users SET is_active = 0, email = CONCAT('deleted_', id, '_', email), password = 'DISABLED' WHERE id = %s",
+        (user_id,), commit=True
+    )
 
 
 # ── Documents ──────────────────────────────────────────────

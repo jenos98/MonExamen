@@ -5,6 +5,7 @@
 let currentUser;
 let pendingRejectDocId = null;
 let pendingDeleteDocId = null;
+let pendingDeleteUserId = null;
 let selectedDocIds = new Set();
 let allDocsCache = [];
 let allUsersCache = [];
@@ -292,6 +293,12 @@ function renderAllDocs() {
   }
   tbody.innerHTML = docs.map(d => {
     const submitter = allUsersCache.find(u => u.id === d.added_by);
+    const isSubmitterDeleted = submitter && submitter.is_active === 0;
+    const submitterLabel = submitter
+      ? (isSubmitterDeleted
+        ? `<span style="color:var(--text-muted);font-style:italic" title="Compte supprimé">${submitter.fullname} <i class="fas fa-user-slash" style="font-size:0.7rem;color:var(--danger)"></i></span>`
+        : submitter.fullname)
+      : '—';
     const isSelected = selectedDocIds.has(d.id);
     return `
       <tr class="${isSelected ? 'selected-row' : ''}">
@@ -300,7 +307,7 @@ function renderAllDocs() {
         <td><span class="badge ${d.type === 'examen' ? 'badge-primary' : 'badge-accent'}">${getDocTypeLabel(d.type)}</span></td>
         <td>${getPromotionLabel(d.promotion_id)}${d.department_id ? '<br><span style="font-size:0.75rem;color:var(--text-muted)">' + getDepartmentLabel(d.department_id) + '</span>' : ''}</td>
         <td>${statusBadge(d.status)}</td>
-        <td style="font-size:0.8rem">${submitter ? submitter.fullname : '—'}</td>
+        <td style="font-size:0.8rem">${submitterLabel}</td>
         <td style="white-space:nowrap;font-size:0.78rem">${formatDate(d.added_at)}</td>
         <td>
           <div style="display:flex;gap:6px">
@@ -401,47 +408,93 @@ function renderUsers() {
   if (q)    users = users.filter(u => u.fullname.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
   if (role) users = users.filter(u => u.role === role);
 
-  document.getElementById('usersCount').textContent = `${users.length} utilisateurs`;
+  // Filter out deactivated accounts from the default view (only show active)
+  const activeUsers = users.filter(u => u.is_active !== 0);
+  const inactiveUsers = users.filter(u => u.is_active === 0);
+
+  document.getElementById('usersCount').textContent = `${activeUsers.length} utilisateurs`;
   const tbody = document.getElementById('usersBody');
-  if (!users.length) {
+  if (!activeUsers.length && !inactiveUsers.length) {
     tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:40px">Aucun utilisateur trouvé.</td></tr>`;
     return;
   }
-  tbody.innerHTML = users.map(u => `
-    <tr>
-      <td>
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:32px;height:32px;border-radius:8px;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:#000;flex-shrink:0">
-            ${u.fullname.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2)}
+
+  const renderRow = (u) => {
+    const isInactive = u.is_active === 0;
+    const initials = u.fullname.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2);
+    const avatarBg = isInactive ? 'rgba(255,255,255,0.08)' : 'var(--primary)';
+    const avatarColor = isInactive ? 'var(--text-muted)' : '#000';
+    const nameStyle = isInactive ? 'color:var(--text-muted);text-decoration:line-through' : '';
+
+    let actions = '';
+    if (u.id === currentUser.id) {
+      actions = '<span style="color:var(--text-muted);font-size:0.8rem">Vous</span>';
+    } else if (isInactive) {
+      actions = '<span class="badge badge-danger" style="opacity:0.7"><i class="fas fa-ban"></i> Désactivé</span>';
+    } else {
+      actions = `<div style="display:flex;gap:6px">
+        <button class="btn btn-outline btn-sm" onclick="openEditUserModal('${u.id}')"><i class="fas fa-edit"></i> Modifier</button>
+        <button class="btn btn-danger btn-sm" onclick="openDeleteUserModal('${u.id}')"><i class="fas fa-user-slash"></i> Supprimer</button>
+      </div>`;
+    }
+
+    return `
+      <tr style="${isInactive ? 'opacity:0.55' : ''}">
+        <td>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:32px;height:32px;border-radius:8px;background:${avatarBg};display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:${avatarColor};flex-shrink:0">
+              ${initials}
+            </div>
+            <div>
+              <strong style="${nameStyle}">${u.fullname}</strong>
+              ${isInactive ? '<div style="font-size:0.7rem;color:var(--danger);font-weight:600">Compte supprimé</div>' : ''}
+            </div>
           </div>
-          <strong>${u.fullname}</strong>
-        </div>
-      </td>
-      <td style="font-size:0.82rem">${u.email}</td>
-      <td>${roleBadge(u.role)}</td>
-      <td style="font-size:0.82rem">${u.promotion_id ? getPromotionLabel(u.promotion_id) : '—'}</td>
-      <td style="font-size:0.78rem;white-space:nowrap">${formatDate(u.created_at)}</td>
-      <td>
-        ${u.id !== currentUser.id
-          ? `<div style="display:flex;gap:6px">
-               <button class="btn btn-outline btn-sm" onclick="openEditUserModal('${u.id}')"><i class="fas fa-edit"></i> Modifier</button>
-               <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">Supprimer</button>
-             </div>`
-          : '<span style="color:var(--text-muted);font-size:0.8rem">Vous</span>'}
-      </td>
-    </tr>
-  `).join('');
+        </td>
+        <td style="font-size:0.82rem;${isInactive ? 'color:var(--text-muted)' : ''}">${isInactive ? '—' : u.email}</td>
+        <td>${roleBadge(u.role)}</td>
+        <td style="font-size:0.82rem">${u.promotion_id ? getPromotionLabel(u.promotion_id) : '—'}</td>
+        <td style="font-size:0.78rem;white-space:nowrap">${formatDate(u.created_at)}</td>
+        <td>${actions}</td>
+      </tr>
+    `;
+  };
+
+  // Show active users first, then inactive ones at the bottom
+  tbody.innerHTML = activeUsers.map(renderRow).join('') + inactiveUsers.map(renderRow).join('');
 }
 
-async function deleteUser(userId) {
-  if (!confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) return;
-  try {
-    await API.deleteUser(userId);
-    showToast('success', 'Utilisateur supprimé', '');
-    await refreshAll();
-  } catch(e) {
-    showToast('error', 'Erreur', 'Impossible de supprimer l\'utilisateur.');
-  }
+function openDeleteUserModal(userId) {
+  const user = allUsersCache.find(u => u.id == userId);
+  if (!user) return;
+
+  pendingDeleteUserId = userId;
+  const initials = user.fullname.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2);
+  const roleLabels = { student: 'Étudiant', admin: 'Administrateur', superadmin: 'Super Admin' };
+
+  document.getElementById('deleteUserAvatar').textContent = initials;
+  document.getElementById('deleteUserName').textContent = user.fullname;
+  document.getElementById('deleteUserEmail').textContent = user.email;
+  document.getElementById('deleteUserRole').innerHTML = roleBadge(user.role);
+  document.getElementById('deleteUserModal').classList.remove('hidden');
+
+  document.getElementById('confirmDeleteUserBtn').onclick = async () => {
+    const btn = document.getElementById('confirmDeleteUserBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Suppression...';
+    try {
+      const result = await API.deleteUser(pendingDeleteUserId);
+      document.getElementById('deleteUserModal').classList.add('hidden');
+      showToast('success', 'Compte supprimé', result.message || `Le compte de ${user.fullname} a été désactivé.`);
+      pendingDeleteUserId = null;
+      await refreshAll();
+    } catch(e) {
+      showToast('error', 'Erreur', e.message || 'Impossible de supprimer cet utilisateur.');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-user-slash"></i> Supprimer le compte';
+    }
+  };
 }
 
 // ── Admin Management ────────────────────────────────────

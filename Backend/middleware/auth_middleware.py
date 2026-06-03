@@ -27,6 +27,10 @@ def token_required(f):
         current_user = UserModel.get_user_by_id(payload['sub'])
         if not current_user:
             return jsonify({'message': 'User not found!'}), 401
+
+        # Reject deactivated accounts even if the JWT is still valid
+        if not current_user.get('is_active', 1):
+            return jsonify({'message': 'Ce compte a été désactivé.'}), 401
             
         return f(current_user, *args, **kwargs)
         

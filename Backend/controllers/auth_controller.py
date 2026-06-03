@@ -77,6 +77,11 @@ class AuthController:
         if not user:
             return jsonify({'message': 'Invalid credentials'}), 401
 
+        # Explicit check for deactivated accounts (get_user_by_email filters active only,
+        # so if user is None but raw lookup finds them, they're deactivated)
+        if not user.get('is_active', 1):
+            return jsonify({'message': 'Ce compte a été désactivé définitivement.'}), 403
+
         if not check_password(password, user['password']):
             return jsonify({'message': 'Invalid credentials'}), 401
 

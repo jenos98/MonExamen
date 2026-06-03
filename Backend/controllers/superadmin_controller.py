@@ -3,7 +3,7 @@ from models.user_model import UserModel
 from models.department_model import DepartmentModel
 from models.promotion_model import PromotionModel
 from models.document_model import DocumentModel
-from database.db import get_all_logs, clear_logs as db_clear_logs
+from database.db import get_all_logs, clear_logs as db_clear_logs, add_log
 
 class SuperAdminController:
     @staticmethod
@@ -31,12 +31,35 @@ class SuperAdminController:
         user = UserModel.get_user_by_id(user_id)
         if not user:
             return jsonify({'message': 'User not found'}), 404
-            
+
+        if user['id'] == current_user['id']:
+            return jsonify({'message': 'Vous ne pouvez pas supprimer votre propre compte.'}), 403
+
         if user['role'] == 'superadmin':
             return jsonify({'message': 'Cannot delete superadmin'}), 403
-            
+
+        if not user.get('is_active', 1):
+            return jsonify({'message': 'Ce compte est déjà désactivé.'}), 400
+
+        # Soft-delete: deactivate the user (preserves documents)
         UserModel.delete_user(user_id)
-        return jsonify({'message': 'User deleted successfully'}), 200
+
+        # Log the action
+        role_label = 'administrateur' if user['role'] == 'admin' else 'étudiant'
+        add_log(
+            f"Suppression du compte {role_label} : {user['fullname']} ({user['email']})",
+            log_type='warning',
+            user_name=current_user['fullname']
+        )
+
+        return jsonify({
+            'message': f"Le compte de {user['fullname']} a été désactivé définitivement.",
+            'deleted_user': {
+                'id': user['id'],
+                'fullname': user['fullname'],
+                'role': user['role']
+            }
+        }), 200
 
     @staticmethod
     def get_users(current_user):
